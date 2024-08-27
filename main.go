@@ -128,25 +128,61 @@ func sessionExists(name string) bool {
 }
 
 // createSession creates a new tmux session based on the configuration.
-func createSession(session *TmuxSession) {
-	exec.Command("tmux", "new-session", "-d", "-s", session.SessionName).Run()
+func createSession(session *TmuxSession, basePath string) error {
+	// Create a new tmux session
+	err := exec.Command("tmux", "new-session", "-d", "-s", session.SessionName).Run()
+	if err != nil {
+		return fmt.Errorf("failed to create session: %v", err)
+	}
 
 	for i, window := range session.Windows {
+		targetWindow := fmt.Sprintf("%s:%d", session.SessionName, i)
+
 		if i == 0 {
-			exec.Command("tmux", "rename-window", "-t", "1", window.Name).Run()
+			// Rename the first window in the session
+			err = exec.Command("tmux", "rename-window", "-t", targetWindow, window.Name).Run()
 		} else {
-			exec.Command("tmux", "new-window", "-t", fmt.Sprintf("%s:%d", session.SessionName, i+1), "-n", window.Name).Run()
+			// Create new windows for the session
+			err = exec.Command("tmux", "new-window", "-t", session.SessionName, "-n", window.Name).Run()
 		}
 
+		if err != nil {
+			return fmt.Errorf("failed to create window: %v", err)
+		}
+
+		// Change directory in each tmux window to the base path of the selected .tmux file
+		err = exec.Command("tmux", "send-keys", "-t", targetWindow, fmt.Sprintf("cd %s", basePath), "C-m").Run()
+		if err != nil {
+			return fmt.Errorf("failed to change directory in window %d: %v", i, err)
+		}
+
+		// Send commands to each window
 		for _, cmdStr := range window.Commands {
-			exec.Command("tmux", "send-keys", "-t", fmt.Sprintf("%d", i+1), cmdStr, "C-m").Run()
+			err = exec.Command("tmux", "send-keys", "-t", targetWindow, cmdStr, "C-m").Run()
+			if err != nil {
+				return fmt.Errorf("failed to send command to window %d: %v", i, err)
+			}
 		}
 	}
+
+	return nil
 }
 
 // attachSession attaches to an existing tmux session.
-func attachSession(name string) {
-	exec.Command("tmux", "attach-session", "-t", name).Run()
+func attachSession(name string) error {
+    fmt.Printf("Attempting to attach to session: %s\n", name)
+
+    cmd := exec.Command("tmux", "attach-session", "-t", name)
+    cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+    cmd.Stdin = os.Stdin
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    err := cmd.Run()
+    if err != nil {
+        return fmt.Errorf("failed to attach to session: %v", err)
+    }
+
+    return nil
 }
 
 func main() {
@@ -195,14 +231,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Get the base path of the selected script to use as the directory in tmux windows
+	basePath := filepath.Dir(selectedScript)
+
 	// Check if the session already exists
 	if sessionExists(sessionConfig.SessionName) {
 		fmt.Printf("Session %s already exists. Attaching to it.\n", sessionConfig.SessionName)
-		attachSession(sessionConfig.SessionName)
+		err = attachSession(sessionConfig.SessionName)
+		if err != nil {
+			fmt.Printf("Error attaching to session: %v\n", err)
+		}
 	} else {
 		// Create the session and attach
-		createSession(sessionConfig)
-		attachSession(sessionConfig.SessionName)
+		err = createSession(sessionConfig, basePath)
+		if err != nil {
+			fmt.Printf("Error creating session: %v\n", err)
+			os.Exit(1)
+		}
+
+		err = attachSession(sessionConfig.SessionName)
+		if err != nil {
+			fmt.Printf("Error attaching to session: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
