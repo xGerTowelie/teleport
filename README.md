@@ -2,6 +2,9 @@
 
 This Go program is designed to streamline the process of initializing and managing `tmux` sessions. It allows you to define your tmux session structure using JSON configuration files, and it provides a mechanism to search for and select these configurations using `fzf`. Additionally, the program supports general configuration via a `.tp.conf` file located in your home directory.
 
+## Todos
+- [ ] fix bug: open in terminal spawns new subprocess
+
 ## Features
 
 - Automatically initialize `tmux` sessions based on predefined configurations.
