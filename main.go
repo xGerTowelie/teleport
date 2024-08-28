@@ -170,22 +170,57 @@ func createSession(session *TmuxSession, basePath string) error {
 
 // attachSession attaches to an existing tmux session.
 func attachSession(name string) error {
-    fmt.Printf("Attempting to attach to session: %s\n", name)
+	fmt.Printf("Attempting to attach to session: %s\n", name)
 
-    cmd := exec.Command("tmux", "attach-session", "-t", name)
-    cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-    cmd.Stdin = os.Stdin
-    cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
-    err := cmd.Run()
-    if err != nil {
-        return fmt.Errorf("failed to attach to session: %v", err)
-    }
+	cmd := exec.Command("tmux", "attach-session", "-t", name)
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to attach to session: %v", err)
+	}
 
-    return nil
+	return nil
+}
+
+// initTmuxConfig creates a minimal .tmux file in the current directory.
+func initTmuxConfig() error {
+	minimalConfig := TmuxSession{
+		SessionName: "my-session",
+		Windows: []TmuxWindow{
+			{
+				Name:     "window1",
+				Commands: []string{"echo 'Hello, tmux!'"},
+			},
+		},
+	}
+
+	data, err := json.MarshalIndent(minimalConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal minimal config: %v", err)
+	}
+
+	err = ioutil.WriteFile(".tmux", data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write .tmux file: %v", err)
+	}
+
+	fmt.Println("Created minimal .tmux file in the current directory.")
+	return nil
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "init" {
+		err := initTmuxConfig()
+		if err != nil {
+			fmt.Println("Error initializing tmux config:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// Read the .tp.conf configuration
 	config, err := ReadConfig()
 	if err != nil {
@@ -256,4 +291,3 @@ func main() {
 		}
 	}
 }
-
